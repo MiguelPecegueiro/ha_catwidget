@@ -1,0 +1,20 @@
+{
+  "entity_id": "automation.catlink_bin_is_full",
+  "state": "on",
+  "attributes": {
+    "id": "1760423727379",
+    "last_triggered": "2026-05-29T15:49:10.212817+00:00",
+    "mode": "single",
+    "current": 0,
+    "icon": "mdi:emoticon-poop",
+    "friendly_name": "Catlink bin is full"
+  },
+  "last_changed": "2026-05-31T01:01:36.098316+00:00",
+  "last_reported": "2026-05-31T01:01:36.098316+00:00",
+  "last_updated": "2026-05-31T01:01:36.098316+00:00",
+  "context": {
+    "id": "01KSXRSXF2D157796B12GSZP7Z",
+    "parent_id": null,
+    "user_id": null
+  }
+}

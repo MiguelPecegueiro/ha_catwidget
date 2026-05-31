@@ -1,0 +1,20 @@
+{
+  "entity_id": "automation.catlink_stops_cleaning",
+  "state": "on",
+  "attributes": {
+    "id": "1760211806874",
+    "last_triggered": "2026-05-30T06:57:21.334944+00:00",
+    "mode": "single",
+    "current": 0,
+    "icon": "mdi:emoticon-poop-outline",
+    "friendly_name": "Catlink stops cleaning"
+  },
+  "last_changed": "2026-05-31T01:01:36.097589+00:00",
+  "last_reported": "2026-05-31T01:01:36.097589+00:00",
+  "last_updated": "2026-05-31T01:01:36.097589+00:00",
+  "context": {
+    "id": "01KSXRSXF1XXFC6ETB9FAC5MA2",
+    "parent_id": null,
+    "user_id": null
+  }
+}

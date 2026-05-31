@@ -1,0 +1,4 @@
+update.tailscale_update
+update.bodymiscale_update
+update.cat_scale_the_smart_weight_sensor_for_cat_litter_boxes_update
+automation.reload_tailscale_on_failure
