@@ -19,7 +19,7 @@ All culminated in a fatidic day where my girlfriend woke me up on a Sunday at 8a
 
 ## Screenshot
 
-![Dashboard](screenshots/dashboard.png)
+![Dashboard](screenshots/screenappwidget.png)
 
 ---
 
