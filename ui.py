@@ -1,32 +1,36 @@
 import sys
 import json
-import win32gui
-import ctypes
 from datetime import datetime, timezone
-import math
 from PySide6 import QtCore, QtWidgets, QtGui
 from ha_client import get_state, check_health, run_action
 from utils import format_time_ago
+from worker import Worker
+import winreg
+import os
 
 class CatCard(QtWidgets.QFrame):
-    def __init__(self,cat):
+    def __init__(self,cat,catimg):
         super().__init__()
-
-        self.cat_name = cat;
+        
+        self.cat_name = cat
 
         self.setStyleSheet("""
             QFrame { background-color: #1e1e2e; border-radius: 12px; border: 1px solid #2a2a3e; }
             QLabel { border: none; background: transparent; color: #dfe6e9; }
             QPushButton { border: 1px solid #3a3a5e; border-radius: 6px; background: transparent; color: #dfe6e9; padding: 4px; }
             QPushButton:hover { background: #2a2a4e; }
+            QLabel#catPhoto { border-radius: 15px; }
         """)
 
         self.main_layout = QtWidgets.QVBoxLayout(self)
 
         self.topcard_layout = QtWidgets.QHBoxLayout()
-        self.cat_label = QtWidgets.QLabel(cat)
+        self.cat_label = QtWidgets.QLabel('')
         self.topcard_layout.addWidget(self.cat_label) 
-        self.cat_photo = QtWidgets.QLabel('photocat') 
+        self.cat_photo = QtWidgets.QLabel('')
+        self.cat_photo_pixmap = QtGui.QPixmap(catimg)
+        self.cat_photo.setPixmap(self.cat_photo_pixmap)
+        self.cat_photo.setObjectName("catPhoto")
         self.topcard_layout.addWidget(self.cat_photo) 
         self.main_layout.addLayout(self.topcard_layout)
 
@@ -66,12 +70,11 @@ class CatCard(QtWidgets.QFrame):
         self.main_layout.addWidget(self.feedcat_label)
 
         self.feedcat_button.clicked.connect(lambda: self.feedcat(cat))
+        
 
-        self.update_status(cat)  
+    def update_status(self,catfoodstatus, catlastfeedtime, catfeedingtimes):
 
-    def update_status(self,cat):
-
-        foodstatus_api = get_state(f'binary_sensor.one_rfid_smart_feeder_{cat}_food_status')
+        foodstatus_api = catfoodstatus
         foodstatus = foodstatus_api.state
         foodstatusindicator = '#fdcb6e'
         if(foodstatus == None):
@@ -87,7 +90,7 @@ class CatCard(QtWidgets.QFrame):
         self.foodstatus_stateindicator.setStyleSheet(f'font-size: 20px; color: {foodstatusindicator}')
 
 
-        lastfeedtime_api = get_state(f'sensor.one_rfid_smart_feeder_{cat}_last_feed_time')
+        lastfeedtime_api = catlastfeedtime
         lastfeedtime = lastfeedtime_api.state
         if(lastfeedtime == None):
             lastfeedtime = lastfeedtime_api.error
@@ -96,7 +99,7 @@ class CatCard(QtWidgets.QFrame):
         self.lastfeedtime_state.setText(str(lastfeedtime))
 
 
-        todayfeedingtime_api = get_state(f'sensor.one_rfid_smart_feeder_{cat}_today_s_feeding_times')
+        todayfeedingtime_api = catfeedingtimes
         todayfeedingtime = todayfeedingtime_api.state
         if(todayfeedingtime == None):
             todayfeedingtime = todayfeedingtime_api.error
@@ -111,8 +114,7 @@ class CatCard(QtWidgets.QFrame):
 class MainWindow(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-
-        self.setWindowFlags(QtCore.Qt.WindowType.WindowStaysOnTopHint)
+        self.offset = None
 
         self.setStyleSheet("""
             QWidget { background-color: #0f0f0f; color: #dfe6e9; }
@@ -154,12 +156,24 @@ class MainWindow(QtWidgets.QWidget):
 
         self.catcards_layout = QtWidgets.QHBoxLayout()
 
-        with open("config.json", "r", encoding= "utf-8") as f:
+        with open(os.path.join(os.path.dirname(sys.executable), "config.json"), "r", encoding= "utf-8") as f:
             config = json.load(f)
         
+        self.icon = QtGui.QIcon(os.path.join(os.path.dirname(sys.executable), config["icon"]))
+        self.trayicon = QtWidgets.QSystemTrayIcon(self.icon, self)
+        self.trayicon.show()
+
+        self.menu = QtWidgets.QMenu()
+        self.menu_qaction = self.menu.addAction('Quit')
+        self.menu_qaction.triggered.connect(QtWidgets.QApplication.quit)
+        self.menu_startonloginaction = self.menu.addAction('Add to startup')
+        self.menu_startonloginaction.setCheckable(True)
+        self.menu_startonloginaction.triggered.connect(self.toggle_startup)
+        self.trayicon.setContextMenu(self.menu)
+
         self.cat_cards=[]
         for cat in config["cats"]:
-            card = CatCard(cat)
+            card = CatCard(cat["name"],os.path.join(os.path.dirname(sys.executable), cat["img"]))
             self.cat_cards.append(card)
             self.catcards_layout.addWidget(card)
 
@@ -172,15 +186,19 @@ class MainWindow(QtWidgets.QWidget):
         
         self.button.clicked.connect(self.feedcats)
 
-        self.update_status()
+        self.start_refresh()
 
         self.timer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self.update_status)
+        self.timer.timeout.connect(self.start_refresh)
         self.timer.start(60000)
         
+    def start_refresh(self):
+        self.worker = Worker()
+        self.worker.data_ready.connect(self.on_data_ready)
+        self.worker.start()
 
-    def update_status(self):
-        litterboxbinstatus_api = get_state('automation.catlink_bin_is_full')
+    def on_data_ready(self,data): 
+        litterboxbinstatus_api = data["litterboxbin"]
         litterboxbinstatus = litterboxbinstatus_api.state
         litterboxbinstatusindicator = '#fdcb6e'
         if(litterboxbinstatus == None):
@@ -196,7 +214,7 @@ class MainWindow(QtWidgets.QWidget):
         self.litterboxbinstatus_indicator.setStyleSheet(f'font-size: 50px; color: {litterboxbinstatusindicator}')
 
 
-        litterboxcleaningstatus_api = get_state('automation.catlink_stops_cleaning')
+        litterboxcleaningstatus_api = data["litterboxcleaning"]
         litterboxcleaningstatus = litterboxcleaningstatus_api.state
         litterboxcleaningstatusindicator = '#fdcb6e'
         if(litterboxcleaningstatus == None):
@@ -213,7 +231,7 @@ class MainWindow(QtWidgets.QWidget):
 
 
         
-        apistatus = check_health()
+        apistatus = data["apistatus"]
         apistatusindicator = '#E24B4A'
 
         self.apistatus_statuscard_label.setText(f'API Status\n{apistatus}\n{datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")}')
@@ -222,48 +240,45 @@ class MainWindow(QtWidgets.QWidget):
         self.apistatus_indicator.setStyleSheet(f'font-size: 50px; color: {apistatusindicator}')
 
         for card in self.cat_cards:
-            card.update_status(card.cat_name)
+            card.update_status(data[f"{card.cat_name}foodstatus"],data[f"{card.cat_name}lastfeedtime"],data[f"{card.cat_name}feedingtimes"] ) 
 
 
-        
 
     @QtCore.Slot()
     def feedcats(self):        
         for card in self.cat_cards:
             card.feedcat(card.cat_name)
-      
+
+
+    def mousePressEvent(self, event):
+        self.offset = event.globalPosition().toPoint() - self.pos()
+
+    def mouseMoveEvent(self, event):
+        if(self.offset is not None):
+            self.move(event.globalPosition().toPoint() - self.offset)
+
+    def mouseReleaseEvent(self, event):
+        self.offset = None
+        
+    def toggle_startup(self,checked):
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,'Software\\Microsoft\\Windows\\CurrentVersion\\Run',access= winreg.KEY_SET_VALUE) as k:
+            if(checked):           
+                winreg.SetValueEx(k,'CatWidget',0,winreg.REG_SZ,sys.executable)
+            else:
+                winreg.DeleteValue(k,'CatWidget')
+
+
+
 
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
 
     widget = MainWindow()
-    widget.resize(800, 600)
-    widget.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground)
-    
-    hwnd = int(widget.winId())
-    progman = win32gui.FindWindow("Progman",None)
-    ctypes.windll.user32.SendMessageTimeoutW(progman,0x052c,0,0,0,1000,None)
-
-    workerw = None
-    def enum_windows_callback(hwnd, _):
-        global workerw
-        shell = win32gui.FindWindowEx(hwnd, 0, "SHELLDLL_DefView", None)
-        print(f"hwnd: {hwnd}, shell: {shell}")
-        if shell:
-            workerw = hwnd #win32gui.FindWindowEx(None, hwnd, "WorkerW", None)
-            print(f"Found! workerw: {workerw}")
-        return True
-
-    win32gui.EnumWindows(enum_windows_callback,None)
-
-    if workerw:
-        win32gui.SetParent(hwnd,workerw)
-
-    print(f"workerw: {workerw}")
-    print(f"hwnd: {hwnd}")
+    widget.resize(800, 600)   
+    widget.setWindowFlags(QtCore.Qt.WindowType.FramelessWindowHint | QtCore.Qt.WindowType.WindowStaysOnBottomHint  | QtCore.Qt.WindowType.Tool )
     widget.show()
-    widget.raise_()
+
     sys.exit(app.exec())
 
 

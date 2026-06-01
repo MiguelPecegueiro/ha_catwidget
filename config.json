@@ -1,3 +1,17 @@
 {
-    "cats": ["Pi" , "Po" , "Pa"]
+    "cats":[   
+        {
+            "name" : "Pi",
+            "img" : "assets/pi.png"
+        },
+        {
+            "name" : "Po",
+            "img" : "assets/po.png"
+        },      
+        {
+            "name" : "Pa",
+            "img" : "assets/pa.png"
+        }    
+    ],
+    "icon":"assets/favicon-32x32.png"
 }
