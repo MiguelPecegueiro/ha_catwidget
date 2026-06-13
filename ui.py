@@ -2,10 +2,10 @@ import sys
 import json
 from datetime import datetime, timezone
 from PySide6 import QtCore, QtWidgets, QtGui
+from PySide6.QtCore import Qt
 from ha_client import get_state, check_health, run_action
 from utils import format_time_ago
 from worker import Worker
-import winreg
 import os
 
 class CatCard(QtWidgets.QFrame):
@@ -115,6 +115,7 @@ class MainWindow(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.offset = None
+        self.setMouseTracking(True)
 
         self.setStyleSheet("""
             QWidget { background-color: #0f0f0f; color: #dfe6e9; }
@@ -156,10 +157,10 @@ class MainWindow(QtWidgets.QWidget):
 
         self.catcards_layout = QtWidgets.QHBoxLayout()
 
-        with open(os.path.join(os.path.dirname(sys.executable), "config.json"), "r", encoding= "utf-8") as f:
+        with open(os.path.join(os.path.dirname(__file__), "config.json"), "r", encoding= "utf-8") as f:
             config = json.load(f)
         
-        self.icon = QtGui.QIcon(os.path.join(os.path.dirname(sys.executable), config["icon"]))
+        self.icon = QtGui.QIcon(os.path.join(os.path.dirname(__file__), config["icon"]))
         self.trayicon = QtWidgets.QSystemTrayIcon(self.icon, self)
         self.trayicon.show()
 
@@ -173,7 +174,7 @@ class MainWindow(QtWidgets.QWidget):
 
         self.cat_cards=[]
         for cat in config["cats"]:
-            card = CatCard(cat["name"],os.path.join(os.path.dirname(sys.executable), cat["img"]))
+            card = CatCard(cat["name"],os.path.join(os.path.dirname(__file__), cat["img"]))
             self.cat_cards.append(card)
             self.catcards_layout.addWidget(card)
 
@@ -261,22 +262,23 @@ class MainWindow(QtWidgets.QWidget):
         self.offset = None
         
     def toggle_startup(self,checked):
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,'Software\\Microsoft\\Windows\\CurrentVersion\\Run',access= winreg.KEY_SET_VALUE) as k:
-            if(checked):           
-                winreg.SetValueEx(k,'CatWidget',0,winreg.REG_SZ,sys.executable)
-            else:
-                winreg.DeleteValue(k,'CatWidget')
-
-
-
-
+        path = os.path.expanduser("~/.config/autostart/catwidget.desktop")
+        if(checked):           
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="UTF-8") as f:
+                f.write("[Desktop Entry]\n")
+                f.write("Type=Application\n")
+                f.write("Name=CatWidget\n")
+                f.write(f"Exec={sys.executable} {__file__}\n")
+        else:
+            if os.path.exists(path):
+                os.remove(path)
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
 
     widget = MainWindow()
     widget.resize(800, 600)   
-    widget.setWindowFlags(QtCore.Qt.WindowType.FramelessWindowHint | QtCore.Qt.WindowType.WindowStaysOnBottomHint  | QtCore.Qt.WindowType.Tool )
     widget.show()
 
     sys.exit(app.exec())
